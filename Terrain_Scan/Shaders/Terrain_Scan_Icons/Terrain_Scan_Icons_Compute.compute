@@ -1,0 +1,283 @@
+#pragma kernel CSMain
+
+#include "./Terrain_Scan_Icons_Shared.hlsl"
+
+// Terrain scan effect properties.
+float3 _TerrainScanSpreadDirection;
+float3 _TerrainScanSpreadRightDirection;
+float _TerrainScanMaxAngle;
+
+// Properties describing orthographic camera rendering data for the icons.
+// X = Local Height, Y = Near Plane Distance, Z = Far Plane Distance.
+float3 _IconsCameraProperties;
+
+// Icons distribution properties.
+float _IconsVisibilityRangeSquared;
+int _IconsRowCount;
+int _IconsColumnCount;
+float _IconsSpacingBetweenRows;
+float _IconsSpacingBetweenColumns;
+
+// Icons movement animation properties.
+float _MovementOffsetMultiplier;
+float _MovementAmplitude;
+float _MovementFrequency;
+float _Time;
+
+// Opacity Animation Settings.
+float _CurrentAnimationTime;
+float _TotalAnimationCycles;
+float _AnimationCycleDuration;
+float _FadeInDuration;
+float _FullyVisibleDuration;
+float _FadeOutDuration;
+float _FullyInvisibleDuration;
+float _SpreadSpeedMultiplier;
+float _UnwalkableTerrainIconSpreadRangeOffset;
+float _AppearingFadeInDistanceFromEdge;
+float _CurrentScanSpreadRange;
+
+// Helper textures for positioning the icons.
+Texture2D<float4> _NormalsAndIdRT;
+Texture2D<float> _DepthRT; 
+SamplerState _LinearClampSampler;
+int _NormalsAndIdRTWidth;
+int _NormalsAndIdRTHeight;
+
+// Buffer containing information about different types of the terrain.
+StructuredBuffer<TerrainTypeData> _TerrainTypesData;
+
+// Buffer containing general information about terrain types.
+StructuredBuffer<TerrainTypesGeneralInfo> _TerrainTypesGeneralInfo; 
+
+// Output data buffer.
+RWStructuredBuffer<TerrainIconInfo> _TerrainIconsData;
+
+float inverseLerp(float from, float to, float value) 
+{
+    return (value - from) / (to - from);
+}
+
+int DecodeIdSNORM(float idAsFloat)
+{
+    return idAsFloat * 127.0;
+}
+
+int DecodeIdUNORM(float idAsFloat) 
+{
+    return idAsFloat * 255.0;
+}
+
+float mod(float x, float y)
+{
+    return x - y * floor(x/y);
+}
+
+float CalculateAnimationOpacity(float time)
+{
+    if(time < 0.0){
+        return 1.0;
+    }
+
+    time = min(time, _AnimationCycleDuration);
+    float currentAlpha = 0.0;
+
+    if(time < _FullyVisibleDuration) 
+    {
+        // Fully visible.
+        currentAlpha = 1.0;
+    }
+    else if(time < (_FullyVisibleDuration + _FadeOutDuration)) 
+    {
+        // Fade out.
+        currentAlpha = lerp(1.0, 0.0, ((time - (_FullyVisibleDuration)) / _FadeOutDuration));
+    }
+    else if(time < (_FullyVisibleDuration + _FadeOutDuration + _FullyInvisibleDuration))
+    {
+        // Fully invisible.
+        currentAlpha = 0.0;
+    }
+    else 
+    {
+        // Fade in.
+        currentAlpha = lerp(.0, 1.0, ((time - (_FullyVisibleDuration + _FadeOutDuration + _FullyInvisibleDuration)) / _FadeInDuration));
+    }
+
+    return saturate(currentAlpha);
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    int columnIndex = (int)id.x;
+    int rowIndex = (int)id.y;
+
+    if(rowIndex >= _IconsRowCount || columnIndex >= _IconsColumnCount)
+    {
+        return;
+    }
+
+    // Index of the icon in the compute buffer of all icons.
+    uint iconIndex = rowIndex * _IconsColumnCount + columnIndex;
+
+    // Helper variables that will be stored in the final output structure.
+    float3 iconPosition;
+    float iconSize = 0.0;
+    float iconOpacity = 1.0;
+    uint iconShapeID = 0;
+    uint iconColorID = 0;
+    float dangerIconSpawnTime = -1.0;
+
+    // Fetching general information about the terrain types. This is required for every icon.
+    TerrainTypesGeneralInfo terrainTypesGeneralInfo = _TerrainTypesGeneralInfo[0];
+
+    // Calculating the world position of the terrain scan icon.
+    float startXOffset = (_IconsColumnCount - 1.0) * 0.5 * _IconsSpacingBetweenColumns;
+    float iconXOffset = -startXOffset + (float)columnIndex * _IconsSpacingBetweenColumns;
+    float iconZOffset = (float)rowIndex * _IconsSpacingBetweenRows;
+    iconPosition = iconXOffset * _TerrainScanSpreadRightDirection + iconZOffset * _TerrainScanSpreadDirection;
+
+    // Offsetting icon position on the Y-axis based on the height read from the _DepthRT.
+    float2 uv = float2((float)columnIndex / (float)(_IconsColumnCount - 1), (float)rowIndex / (float)(_IconsRowCount - 1));
+    float depth = 1.0 - _DepthRT.SampleLevel(_LinearClampSampler, uv, 0);
+    float cameraHeightInLocalSpace = _IconsCameraProperties.x;
+    float nearPlaneHeight = cameraHeightInLocalSpace - _IconsCameraProperties.y;
+    float farPlaneHeight = cameraHeightInLocalSpace - _IconsCameraProperties.z;
+    iconPosition.y = lerp(nearPlaneHeight, farPlaneHeight, saturate(depth));
+
+    // Reading the ID from the Terrain Type ID texture and decoding it into an usable index for the terrain type.
+    float4 normalAndId = _NormalsAndIdRT.Load(int3(uv.x * _NormalsAndIdRTWidth, uv.y * _NormalsAndIdRTHeight, 0));
+    float terrainTypeId = normalAndId.a;
+    int terrainTypeIndex = DecodeIdSNORM(terrainTypeId);
+
+    // If the icon is located beneath the water surface, change it's type to water.
+    if(iconPosition.y < terrainTypesGeneralInfo.WaterHeightLocalSpace) 
+    {        
+        float waterDepth = abs(terrainTypesGeneralInfo.WaterHeightLocalSpace - iconPosition.y);
+        if(waterDepth <= terrainTypesGeneralInfo.ShallowWaterDepthThreshold) 
+        {
+            terrainTypeIndex = terrainTypesGeneralInfo.ShallowWaterTypeIndex;
+        }
+        else if(waterDepth <= terrainTypesGeneralInfo.DeepWaterDepthThreshold)
+        {
+            terrainTypeIndex = terrainTypesGeneralInfo.DeepWaterTypeIndex;
+        }
+        else
+        {
+            terrainTypeIndex = terrainTypesGeneralInfo.TooDeepWaterTypeIndex;
+        }
+    }     
+
+    // Using the normal of the terrain to change it's type based on the angle. Steeper angles can't be walked on so easily.
+    if(terrainTypeIndex == 0)
+    {
+        float3 normalDirection = normalize(normalAndId.xyz);
+        float terrainSteepness = dot(normalDirection, float3(0,1,0));
+
+        if(terrainSteepness <= terrainTypesGeneralInfo.SteepTerrainThreshold) 
+        {
+            terrainTypeIndex = terrainTypesGeneralInfo.UnwalkableTerrainTypeIndex;
+        } 
+        else if(terrainSteepness <= terrainTypesGeneralInfo.NormalTerrainThreshold) 
+        {
+            terrainTypeIndex = terrainTypesGeneralInfo.SteepTerrainTypeIndex;
+        }
+    }
+
+    // Using the ID we just read to access the correct terrain data.
+    TerrainTypeData terrainTypeData = _TerrainTypesData[terrainTypeIndex];
+    iconSize = terrainTypeData.Size;
+    iconShapeID = terrainTypeData.ShapeID;
+    iconColorID = terrainTypeData.ColorID; 
+
+    // Offset all indicators above water surface, and add a specific height offset to them.
+    iconPosition.y = max(iconPosition.y, terrainTypesGeneralInfo.WaterHeightLocalSpace) + terrainTypeData.HeightOffset;
+
+    // Calculating the direction from the scan effect origin to the terrain scan icon.
+    // This is required for finding out if the icon is inside the circle sector or not.
+    float3 originToIconVector = iconPosition;
+    float3 iconDirectionFromOriginXZ = normalize(float3(originToIconVector.x, 0.0, originToIconVector.z));
+    float distanceFromScanOriginSquared = dot(originToIconVector, originToIconVector);
+    float distanceFromScanOrigin = sqrt(distanceFromScanOriginSquared);
+
+    // Applying vertical offset animation to the particle.
+    float movementOffset = distanceFromScanOrigin * _MovementOffsetMultiplier;
+    // Adding 1.0 to the sine so that the icon doesn't go below the original position, only up.
+    float verticalOffset = _MovementAmplitude * (1.0 + sin(_MovementFrequency * (_Time + movementOffset)));
+    iconPosition.y += verticalOffset;
+
+    // Applying opacity animation to the particle.
+    if(terrainTypeIndex != terrainTypesGeneralInfo.UnwalkableTerrainTypeIndex)
+    {
+        // Calculate the icon's opacity based on the time passed from the start of the effect.
+        float iconLocalTime = (_CurrentAnimationTime - distanceFromScanOrigin * _SpreadSpeedMultiplier);
+        if(iconLocalTime < _TotalAnimationCycles * _AnimationCycleDuration) 
+        {
+            iconLocalTime = iconLocalTime < 0.0 ? iconLocalTime : mod(iconLocalTime, _AnimationCycleDuration);
+        }
+        iconOpacity = CalculateAnimationOpacity(iconLocalTime);    
+
+        // On the last cycle, don't fade icon back in.
+        float timeUponCompletion = (_TotalAnimationCycles * _AnimationCycleDuration) - (_CurrentAnimationTime - distanceFromScanOrigin * _SpreadSpeedMultiplier);
+        if(timeUponCompletion <= _FadeInDuration) 
+        {
+            iconOpacity = 0.0;
+        }
+    } 
+    else 
+    {
+        // Unwalkable terrain icons need to slowly fade out at the end of the effect.
+        iconOpacity = saturate((_TotalAnimationCycles + 0.5) * _AnimationCycleDuration - _CurrentAnimationTime);        
+    }
+
+    // If the current spread range (with offset) reached the unwalkable terrain icon, mark this time.
+    if(_CurrentScanSpreadRange + _UnwalkableTerrainIconSpreadRangeOffset >= distanceFromScanOrigin){
+        dangerIconSpawnTime = _Time;
+    }
+
+    // If the icon is outside the current scan spread range, make the icon invisible. Also, unwalkable
+    // icons have a larger spawn range than other icons.
+    float currentSpreadRange = _CurrentScanSpreadRange + (terrainTypeIndex == terrainTypesGeneralInfo.UnwalkableTerrainTypeIndex ? _UnwalkableTerrainIconSpreadRangeOffset : 0.0);
+    if(distanceFromScanOrigin > currentSpreadRange) 
+    {
+        iconOpacity = 0.0;
+    } 
+    else if(currentSpreadRange - distanceFromScanOrigin < _AppearingFadeInDistanceFromEdge) 
+    {
+        // Fading in opacity based on the distance from the spread range at the first spread.
+        // This is to have that gradual appear of icons at the start, from the edge of the spread.
+        iconOpacity = saturate((currentSpreadRange - distanceFromScanOrigin) / _AppearingFadeInDistanceFromEdge);
+    }
+
+    // Calculating visibility of the icon based on it's angle with the direction of spreading.
+    float directionCorrelation = dot(_TerrainScanSpreadDirection, iconDirectionFromOriginXZ);
+    // 0.0174533 is the multiplier to convert from degrees to radians.
+    float halfMaxAngle = 0.0174533 * 0.5 * _TerrainScanMaxAngle;
+    float iconAngleVisibilityMask = inverseLerp(cos(halfMaxAngle), 1.0, directionCorrelation);
+
+    // In case the icon is located outside the visible circle sector, discard it by setting its scale to 0.
+    if(iconAngleVisibilityMask <= 0.0 || _IconsVisibilityRangeSquared < distanceFromScanOriginSquared) 
+    {
+        iconSize = 0.0;
+    }
+
+    TerrainIconInfo terrainIconInfo;
+    // Reading the current values stored in the buffer to compare the spawn time of the 
+    // danger icon with the value already written into the buffer. This way, we only write the
+    // spawn time if it's smaller than the previously written value.
+    terrainIconInfo = _TerrainIconsData[iconIndex];
+    if(terrainIconInfo.DangerIconSpawnTimeRecorded > 0) 
+    {
+        dangerIconSpawnTime = terrainIconInfo.DangerIconSpawnTime;
+    }
+
+    // Store the info required for rendering the terrain icon particle.
+    terrainIconInfo.Position = iconPosition;
+    terrainIconInfo.Size = iconSize * 1.5;
+    terrainIconInfo.Opacity = iconOpacity;
+    terrainIconInfo.DangerIconSpawnTime = dangerIconSpawnTime;
+    terrainIconInfo.DangerIconSpawnTimeRecorded = dangerIconSpawnTime > 0.0 ? 1 : 0;
+    terrainIconInfo.ShapeID = iconShapeID;
+    terrainIconInfo.ColorID = iconColorID;
+    _TerrainIconsData[iconIndex] = terrainIconInfo;
+}

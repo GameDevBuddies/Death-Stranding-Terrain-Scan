@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1a6c12a7e1d94642a400414ad7db583, type: 3}
+  m_Name: TerrainTypes
+  m_EditorClassIdentifier: 
+  _terrainTypesData:
+  - TerrainType: 0
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.02
+      IconShapeID: 0
+      IconColorID: 0
+  - TerrainType: 1
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.02
+      IconShapeID: 0
+      IconColorID: 2
+  - TerrainType: 2
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.06
+      IconShapeID: 4
+      IconColorID: 2
+  - TerrainType: 3
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.08
+      IconShapeID: 1
+      IconColorID: 1
+  - TerrainType: 4
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.06
+      IconShapeID: 2
+      IconColorID: 0
+  - TerrainType: 5
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.06
+      IconShapeID: 2
+      IconColorID: 2
+  - TerrainType: 6
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.06
+      IconShapeID: 2
+      IconColorID: 1
+  - TerrainType: 7
+    Data:
+      IconHeightOffset: 0.2
+      IconSize: 0.06
+      IconShapeID: 3
+      IconColorID: 0
+  - TerrainType: 8
+    Data:
+      IconHeightOffset: 1.25
+      IconSize: 0.075
+      IconShapeID: 5
+      IconColorID: 3

@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Terrain_Scan_Icons
+  m_Shader: {fileID: 4800000, guid: 5924290308f5dcf4cb1b032f9fcdeb93, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 3000
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _GlowTexture:
+        m_Texture: {fileID: 2800000, guid: 4a987c3e4bf20b348b2bb2d7f78b8551, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _IconColorMapTexture:
+        m_Texture: {fileID: 2800000, guid: 552d602a9e3f1e847a0b90c4ccdc1bd4, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _IconShapeTexture:
+        m_Texture: {fileID: 2800000, guid: 4e55fc552bcd1d44d8d9c9c2750a8f9b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: 4e55fc552bcd1d44d8d9c9c2750a8f9b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _DebugIconColorIndex: 0
+    - _DebugIconShapeIndex: 5
+    - _ExpandedAspectRatio: 8
+    - _GlowAnimationDuration: 0.33
+    - _HorizontalSizeExpansionMultiplier: 128
+    - _IconColorIntensity: 2.25
+    - _IconColorMapTextureColumnCount: 4
+    - _IconShapeTextureColumnCount: 3
+    - _IconShapeTextureRowCount: 3
+    m_Colors: []
+  m_BuildTextureStacks: []

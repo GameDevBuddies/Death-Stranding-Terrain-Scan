@@ -1,0 +1,7 @@
+v.0.4.0
+	- 26.04.2023
+	- Added Show If Attributes:
+		- ShowIf(nameof(boolProperty/boolField)) - eg. ShowIf(nameof(_fieldShouldBeActive))
+		- ShowIf(nameof(Metoda)) - eg. ShowIf(nameof(ShouldShowThisProperty))
+		- ShowIf(nameof(enumProperty/enumField), enum value) - eg. ShowIf(nameof(_enumField), EnumValues.FirstValue)
+v.0.3.0
