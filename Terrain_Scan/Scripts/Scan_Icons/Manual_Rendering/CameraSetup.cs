@@ -22,7 +22,6 @@ namespace GameDevBuddies
             // Terrain Icons Area.
             float terrainIconsAreaWidth = (_iconsRenderer.IconsColumnCount - 1) * _iconsRenderer.IconsSpacingBetweenColumns;
             float terrainIconsAreaHeight = (_iconsRenderer.IconsRowCount - 1) * _iconsRenderer.IconsSpacingBetweenRows;
-            //terrainIconsAreaWidth = Mathf.Min(terrainIconsAreaHeight * 2f, terrainIconsAreaWidth);
 
             // Position camera directly above the effect.
             Vector3 cameraLocalPosition = new Vector3(0f, _cameraHeightOffset, terrainIconsAreaHeight * 0.5f);
